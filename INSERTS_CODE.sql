@@ -1,3 +1,6 @@
+
+CHANGE PLACE TABLE TO HAVE DESCRIPTION IN CREATE AND INSERTS!!!!!
+
 -- ITEM TABLE
 INSERT INTO ITEM (
    ID_ITEM, NAME, DESCRIPTION, PRICE_TO_BUY, PRICE_TO_SELL
@@ -110,38 +113,7 @@ FROM (
  FROM SCHEDULES
  WHERE LOCATION_NAME IS NOT NULL
    AND COORDENATES   IS NOT NULL
-);
-
-
-
-/*
-INSERT INTO SHOP (
-    ID_SHOP,
-    NAME_SHOP,
-    SPECIALIZATION,
-    ID_PLACE,
-    ID_INVENTORY
-)
-SELECT 
-    ID_SHOP, 
-    NAME_SHOP,
-    SPECIALIZATION,
-    ID_PLACE,
-    (500 + ROWNUM) AS ID_INVENTORY
-FROM (
-    SELECT 
-        t.ID_SHOP, 
-        t.NAME AS NAME_SHOP,
-        t.SPECIALIZATION,
-        (SELECT ID_PLACE FROM PLACE WHERE LOCATION_NAME = t.LOCATION_NAME) AS ID_PLACE,
-        ROW_NUMBER() OVER (PARTITION BY t.ID_SHOP ORDER BY t.ID_SHOP) AS rn
-    FROM TRANSACTIONS t
-    WHERE t.ID_SHOP IS NOT NULL
-    AND t.NAME IS NOT NULL
-)
-WHERE rn = 1
-AND NOT EXISTS (SELECT 1 FROM SHOP WHERE ID_SHOP = ID_SHOP);
-*/
+);  
 
 
 -- SHOP table
@@ -171,4 +143,61 @@ FROM (
 )
 WHERE rn = 1
 AND NOT EXISTS (SELECT 1 FROM SHOP WHERE ID_SHOP = ID_SHOP);
+
+
+-- First, populate the CHARACTER table with all unique player IDs
+INSERT INTO CHARACTER (
+  ID_CHARACTER,
+  NAME,
+  AGE,
+  GENDER,
+  ID_VILLAGE
+)
+SELECT
+  TO_NUMBER(ID) AS ID_CHARACTER,
+  NAME,
+  TO_NUMBER(AGE) AS AGE,
+  GENDER,
+  NULL AS ID_VILLAGE  -- Your peer will populate this
+FROM (
+  -- Keep only the first occurrence of each ID
+  SELECT pd.*,
+    ROW_NUMBER() OVER (PARTITION BY ID ORDER BY ROWNUM) as rn
+  FROM PLAYER_DATA pd
+) filtered
+WHERE filtered.rn = 1;  -- Only keeping unique IDs, no limit
+
+-- Then, populate the PLAYER table using the same dynamic approach
+INSERT INTO PLAYER (
+  ID_PLAYER,
+  AVATAR_APPEARANCE,
+  NICKNAME,
+  GOLD,
+  EXPERIENCE,
+  SKILL,
+  SKILL_LEVEL,
+  ID_INVENTORY
+)
+SELECT
+  TO_NUMBER(ID) AS ID_PLAYER,
+  APPARENCE AS AVATAR_APPEARANCE,
+  NICKNAME,
+  TO_NUMBER(GOLD) AS GOLD,
+  TO_NUMBER(EXPERIENCE) AS EXPERIENCE,
+  TO_NUMBER(SKILL) AS SKILL,
+  TO_NUMBER(SKILL_LEVEL) AS SKILL_LEVEL,
+  inv.ID_INVENTORY
+FROM (
+  -- Get unique player entries with a row number
+  SELECT pd.*,
+    ROW_NUMBER() OVER (PARTITION BY ID ORDER BY ROWNUM) as rn
+  FROM PLAYER_DATA pd
+) filtered
+JOIN (
+  -- Get all inventory IDs with a row number
+  SELECT ID_INVENTORY, 
+         ROWNUM as inventory_row_num
+  FROM INVENTORY
+) inv ON filtered.rn = inv.inventory_row_num
+WHERE filtered.rn = 1;  -- Only keep unique IDs
 
