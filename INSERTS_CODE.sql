@@ -103,8 +103,6 @@ FROM (
    AND COORDENATES   IS NOT NULL
 );  
 
-
-
 -- Character (PLAYER_IDs only)
 INSERT INTO CHARACTER (
   ID_CHARACTER,
@@ -118,115 +116,27 @@ SELECT
   NAME,
   TO_NUMBER(AGE) AS AGE,
   GENDER,
-  NULL AS ID_VILLAGE  -- Your peer will populate this
+  NULL AS ID_VILLAGE 
 FROM (
-  -- Keep only the first occurrence of each ID
   SELECT pd.*,
     ROW_NUMBER() OVER (PARTITION BY ID ORDER BY ROWNUM) as rn
   FROM PLAYER_DATA pd
 ) filtered
-WHERE filtered.rn = 1;  -- Only keeping unique IDs, no limit
-
+WHERE filtered.rn = 1; 
 
 -- PLAYER
-INSERT INTO PLAYER (
-  ID_PLAYER,
-  AVATAR_APPEARANCE,
-  NICKNAME,
-  GOLD,
-  EXPERIENCE,
-  SKILL,
-  SKILL_LEVEL,
-  ID_INVENTORY
-)
-SELECT
-  TO_NUMBER(ID) AS ID_PLAYER,
-  APPARENCE AS AVATAR_APPEARANCE,
-  NICKNAME,
-  TO_NUMBER(GOLD) AS GOLD,
-  TO_NUMBER(EXPERIENCE) AS EXPERIENCE,
-  SKILL,
-  TO_NUMBER(SKILL_LEVEL) AS SKILL_LEVEL,
-  inv.ID_INVENTORY
-FROM (
-  -- Get unique player entries with a row number
-  SELECT pd.*,
-    ROW_NUMBER() OVER (PARTITION BY ID ORDER BY ROWNUM) as rn
-  FROM PLAYER_DATA pd
-) filtered
-JOIN (
-  -- Get all inventory IDs with a row number
-  SELECT ID_INVENTORY, 
-         ROWNUM as inventory_row_num
-  FROM INVENTORY
-) inv ON filtered.rn = inv.inventory_row_num
-WHERE filtered.rn = 1;  -- Only keep unique IDs
+INSERT INTO PLAYER (ID_PLAYER, AVATAR_APPEARANCE, NICKNAME, GOLD, EXPERIENCE, SKILL_LEVEL, SKILL)
+SELECT 
+  TO_NUMBER(ID), APPARENCE, NICKNAME, TO_NUMBER(GOLD), 
+  TO_NUMBER(EXPERIENCE), TO_NUMBER(SKILL_LEVEL), SKILL
+FROM PLAYER_DATA pd
+WHERE ROWID = (
+  SELECT MIN(ROWID) 
+  FROM PLAYER_DATA 
+  WHERE ID = pd.ID
+);
 
 
 -- SHOP table
-INSERT INTO SHOP (
-  ID_SHOP,
-  NAME_SHOP,
-  ID_PLACE,
-  ID_INVENTORY
-)
-SELECT
-  shop_data.ID_SHOP,
-  shop_data.NAME_SHOP,
-  shop_data.ID_PLACE,
-  (next_inventory_id + ROWNUM - 1) AS ID_INVENTORY
-FROM (
-  -- Union all unique shop IDs from both sources
-  SELECT 
-    s.ID_SHOP,
-    COALESCE(t.NAME, 'Shop #' || s.ID_SHOP) AS NAME_SHOP,
-    (SELECT MIN(ID_PLACE) 
-     FROM PLACE 
-     WHERE LOCATION_NAME = s.LOCATION_NAME
-     AND (COORDINATES = s.COORDINATES OR (COORDINATES IS NULL AND s.COORDINATES IS NULL))
-    ) AS ID_PLACE,
-    ROW_NUMBER() OVER (PARTITION BY s.ID_SHOP ORDER BY s.ID_SHOP) AS rn
-  FROM (
-    -- Get all unique shops from both sources
-    SELECT ID_SHOP, LOCATION_NAME, COORDENATES AS COORDINATES
-    FROM FESTIVITY_SHOPS 
-    WHERE ID_SHOP IS NOT NULL
-    
-    UNION
-    
-    -- For shops only in TRANSACTIONS, use LOCATION_NAME from TRANSACTIONS
-    SELECT 
-      t.ID_SHOP, 
-      t.LOCATION_NAME, 
-      NULL AS COORDINATES
-    FROM TRANSACTIONS t
-    WHERE t.ID_SHOP IS NOT NULL
-    AND NOT EXISTS (
-      SELECT 1 FROM FESTIVITY_SHOPS fs 
-      WHERE fs.ID_SHOP = t.ID_SHOP
-    )
-  ) s
-  LEFT JOIN (
-    -- Get names from TRANSACTIONS
-    SELECT 
-      ID_SHOP,
-      MAX(NAME) AS NAME
-    FROM TRANSACTIONS
-    GROUP BY ID_SHOP
-  ) t ON s.ID_SHOP = t.ID_SHOP
-) shop_data,
-(
-  -- Subquery for next inventory ID
-  SELECT CASE 
-         WHEN MAX(ID_INVENTORY) IS NULL THEN 1 
-         ELSE MAX(ID_INVENTORY) + 1 
-         END AS next_inventory_id 
-  FROM (
-    SELECT ID_INVENTORY FROM PLAYER
-    UNION
-    SELECT ID_INVENTORY FROM SHOP
-  )
-) inventory_data
-WHERE shop_data.rn = 1
-AND NOT EXISTS (SELECT 1 FROM SHOP WHERE ID_SHOP = shop_data.ID_SHOP);
+
 
