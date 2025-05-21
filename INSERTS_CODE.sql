@@ -96,6 +96,18 @@ FROM (
  WHERE LOCATION_NAME IS NOT NULL
    AND COORDENATES   IS NOT NULL
 );  
+-- insert the different villages
+INSERT INTO VILLAGE (ID_VILLAGE, NAME)
+SELECT               
+      ROWNUM      AS ID_VILLAGE,
+       r.VILLAGE                     AS NAME
+FROM  ( SELECT DISTINCT VILLAGE
+        FROM   RESIDENTS
+        WHERE  VILLAGE IS NOT NULL ) r
+WHERE NOT EXISTS (                      
+        SELECT 1
+        FROM   VILLAGE v
+        WHERE  v.NAME = r.VILLAGE );
 
 -- Character (PLAYER_IDs only)
 INSERT INTO CHARACTER (
@@ -140,6 +152,65 @@ WHERE ROWID = (
   FROM PLAYER_DATA 
   WHERE ID = pd.ID
 );
+
+--inhabitant characters
+
+INSERT INTO CHARACTER (
+  ID_CHARACTER,
+  NAME,
+  AGE,
+  GENDER,
+  ID_VILLAGE
+)
+SELECT
+  TO_NUMBER(r.ID),
+  r.NAME,
+  TO_NUMBER(r.AGE),
+  r.GENDER,
+  ( SELECT v.ID_VILLAGE
+      FROM VILLAGE v
+     WHERE v.NAME = r.VILLAGE
+       AND ROWNUM = 1 )
+FROM (
+  SELECT r.*,
+         ROW_NUMBER() OVER (PARTITION BY r.ID ORDER BY ROWNUM) AS rn
+  FROM RESIDENTS r
+) r
+WHERE r.rn = 1
+  AND TO_NUMBER(r.ID) NOT IN (
+        SELECT ID_CHARACTER FROM CHARACTER
+      );
+
+
+-- inhabitant insert
+INSERT INTO INHABITANT (
+  ID_INHABITANT,
+  PERSONALITY,
+  BIRTHDAY,
+  SPRITE,
+  APPEARENCE
+)
+SELECT
+  TO_NUMBER(r.ID),
+  r.PERSONALITY,
+  CASE
+    WHEN REGEXP_LIKE(TRIM(r.BIRTHDAY), '^\d{1,2}/\d{1,2}/\d{4}$')
+         THEN TO_DATE(TRIM(r.BIRTHDAY), 'DD/MM/YYYY')
+    WHEN REGEXP_LIKE(TRIM(r.BIRTHDAY), '^\d{4}-\d{2}-\d{2}$')
+         THEN TO_DATE(TRIM(r.BIRTHDAY), 'YYYY-MM-DD')
+    ELSE NULL
+  END,
+  r.SPRITE,
+  r.APPARENCE
+FROM (
+  SELECT r.*,
+         ROW_NUMBER() OVER (PARTITION BY r.ID ORDER BY ROWNUM) AS rn
+  FROM RESIDENTS r
+) r
+WHERE r.rn = 1
+  AND TO_NUMBER(r.ID) NOT IN (
+        SELECT ID_CHARACTER FROM CHARACTER
+      );
 
 
 -- SHOP table
