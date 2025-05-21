@@ -245,6 +245,87 @@ GROUP BY t.ID_SHOP,
          t.SELLS_ITEM,
          t.CLIENT2;
 
+-- FEED table
+INSERT INTO FEED (ID_SUPPLY,
+                  ID_ANIMAL_SPECIE)
+SELECT DISTINCT
+       s.ID_SUPPLY,
+       sp.ID_ANIMAL_SPECIE
+FROM   ITEMS_DATA it
+  JOIN SUPPLY s
+    ON s.ID_SUPPLY = TO_NUMBER(it.ID)
+   AND it.NUTRITIONAL_VALUE    IS NOT NULL
+   AND it.QUALITY IS NOT NULL
+
+  JOIN ANIMAL_SPECIE sp
+    ON sp.SPECIE_NAME = it.ANIMAL_SPECIE
+
+WHERE  NOT EXISTS (
+         SELECT 1
+         FROM   FEED f
+         WHERE  f.ID_SUPPLY        = s.ID_SUPPLY
+           AND  f.ID_ANIMAL_SPECIE = sp.ID_ANIMAL_SPECIE
+       );
+
+
+-- Schedule (inserts from shop side)
+INSERT INTO SCHEDULE (
+    ID_SCHEDULE,
+    SEASON,
+    START_TIME,
+    END_TIME,
+    DAY_OF_WEEK
+)
+WITH distinct_slots AS (
+  SELECT DISTINCT
+         START_SCHEDULE AS START_TIME,
+         END_SCHEDULE   AS END_TIME,
+         DAY_OF_WEEK
+  FROM   INVENTORIES
+  WHERE  START_SCHEDULE IS NOT NULL
+    AND  END_SCHEDULE   IS NOT NULL
+    AND  DAY_OF_WEEK    IS NOT NULL
+)
+SELECT
+    ROWNUM               AS ID_SCHEDULE,
+    NULL                 AS SEASON,   
+    ds.START_TIME,
+    ds.END_TIME,
+    ds.DAY_OF_WEEK
+FROM distinct_slots ds;
+
+
+-- Follow table
+INSERT INTO FOLLOW (ID_SHOP,
+                    ID_SCHEDULE)
+SELECT DISTINCT
+       iv.ID_SHOP,
+       sch.ID_SCHEDULE
+FROM   INVENTORIES iv
+
+      
+JOIN   SCHEDULE sch
+  ON   sch.DAY_OF_WEEK = iv.DAY_OF_WEEK
+ AND   sch.START_TIME  = iv.START_SCHEDULE
+ AND   sch.END_TIME    = iv.END_SCHEDULE
+
+    
+JOIN   SHOP sp
+  ON   sp.ID_SHOP = iv.ID_SHOP
+
+WHERE  iv.ID_SHOP        IS NOT NULL
+  AND  iv.DAY_OF_WEEK    IS NOT NULL
+  AND  iv.START_SCHEDULE IS NOT NULL
+  AND  iv.END_SCHEDULE   IS NOT NULL
+
+  AND NOT EXISTS (
+        SELECT 1
+        FROM   FOLLOW f
+        WHERE  f.ID_SHOP     = iv.ID_SHOP
+          AND  f.ID_SCHEDULE = sch.ID_SCHEDULE
+      );
+
+
 
 
 
