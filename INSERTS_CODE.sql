@@ -109,65 +109,6 @@ WHERE NOT EXISTS (
         FROM   VILLAGE v
         WHERE  v.NAME = r.VILLAGE );
 
--- CHARACTER for residents— duplicates removed, clashes with players skipped 
-INSERT INTO CHARACTER (ID_CHARACTER, NAME, AGE, GENDER, ID_VILLAGE)
-SELECT  ID_CHARACTER,
-  NAME,
-  AGE,
-  GENDER,
-  ID_VILLAGE
-FROM (
-  SELECT  TO_NUMBER(r.ID) AS ID_CHARACTER,
-          r.NAME,
-          TO_NUMBER(r.AGE) AS AGE,
-          r.GENDER,
-          ( SELECT v.ID_VILLAGE
-              FROM VILLAGE v
-             WHERE v.NAME = r.VILLAGE
-               AND ROWNUM = 1 ) AS ID_VILLAGE,
-          ROW_NUMBER() OVER (PARTITION BY r.ID ORDER BY ROWNUM) AS rn
-  FROM    RESIDENTS r
-) t
-WHERE  t.rn = 1                                 -- keep one row per ID
-  AND  NOT EXISTS (                             -- skip IDs already used
-        SELECT 1
-        FROM   CHARACTER c
-        WHERE  c.ID_CHARACTER = t.ID_CHARACTER );
-
--- inhabitant insert
-INSERT INTO INHABITANT
-       (ID_INHABITANT,
-        PERSONALITY,
-        BIRTHDAY,
-        SPRITE,
-        APPARENCE)
-SELECT  TO_NUMBER(r.ID) AS ID_INHABITANT,
-        r.PERSONALITY AS PERSONALITY,
-
-        CASE
-          WHEN REGEXP_LIKE(TRIM(r.BIRTHDAY),
-               '^\d{1,2}/\d{1,2}/\d{4}$')
-               THEN TO_DATE(TRIM(r.BIRTHDAY),'DD/MM/YYYY')
-          WHEN REGEXP_LIKE(TRIM(r.BIRTHDAY),
-               '^\d{4}-\d{2}-\d{2}$')
-               THEN TO_DATE(TRIM(r.BIRTHDAY),'YYYY-MM-DD')
-          ELSE NULL
-        END AS BIRTHDAY,
-
-        r.SPRITE,
-        r.APPARENCE
-FROM (
-  SELECT  r.*,
-          ROW_NUMBER() OVER (PARTITION BY r.ID ORDER BY ROWNUM) AS rn
-  FROM    RESIDENTS r
-) r
-WHERE  r.rn = 1
-  AND  NOT EXISTS (                    
-        SELECT 1
-        FROM   INHABITANT i
-        WHERE  i.ID_INHABITANT = TO_NUMBER(r.ID)
-);
-
 -- Character (PLAYER_IDs only)
 INSERT INTO CHARACTER (
   ID_CHARACTER,
@@ -211,6 +152,65 @@ WHERE ROWID = (
   FROM PLAYER_DATA 
   WHERE ID = pd.ID
 );
+
+--inhabitant characters
+
+INSERT INTO CHARACTER (
+  ID_CHARACTER,
+  NAME,
+  AGE,
+  GENDER,
+  ID_VILLAGE
+)
+SELECT
+  TO_NUMBER(r.ID),
+  r.NAME,
+  TO_NUMBER(r.AGE),
+  r.GENDER,
+  ( SELECT v.ID_VILLAGE
+      FROM VILLAGE v
+     WHERE v.NAME = r.VILLAGE
+       AND ROWNUM = 1 )
+FROM (
+  SELECT r.*,
+         ROW_NUMBER() OVER (PARTITION BY r.ID ORDER BY ROWNUM) AS rn
+  FROM RESIDENTS r
+) r
+WHERE r.rn = 1
+  AND TO_NUMBER(r.ID) NOT IN (
+        SELECT ID_CHARACTER FROM CHARACTER
+      );
+
+
+-- inhabitant insert
+INSERT INTO INHABITANT (
+  ID_INHABITANT,
+  PERSONALITY,
+  BIRTHDAY,
+  SPRITE,
+  APPEARENCE
+)
+SELECT
+  TO_NUMBER(r.ID),
+  r.PERSONALITY,
+  CASE
+    WHEN REGEXP_LIKE(TRIM(r.BIRTHDAY), '^\d{1,2}/\d{1,2}/\d{4}$')
+         THEN TO_DATE(TRIM(r.BIRTHDAY), 'DD/MM/YYYY')
+    WHEN REGEXP_LIKE(TRIM(r.BIRTHDAY), '^\d{4}-\d{2}-\d{2}$')
+         THEN TO_DATE(TRIM(r.BIRTHDAY), 'YYYY-MM-DD')
+    ELSE NULL
+  END,
+  r.SPRITE,
+  r.APPARENCE
+FROM (
+  SELECT r.*,
+         ROW_NUMBER() OVER (PARTITION BY r.ID ORDER BY ROWNUM) AS rn
+  FROM RESIDENTS r
+) r
+WHERE r.rn = 1
+  AND TO_NUMBER(r.ID) NOT IN (
+        SELECT ID_CHARACTER FROM CHARACTER
+      );
 
 
 -- SHOP table
