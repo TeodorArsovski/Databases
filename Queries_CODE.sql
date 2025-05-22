@@ -1,87 +1,197 @@
---QUERIES CODE FILE:
--- Items Query 1 - Not stonks
+
+-- ITEMS QUERY 1 - NOT STONKS
 SELECT  
     c.NAME_CROP AS CROP_NAME,
     s.SEED_TYPE AS TYPE,
-    i.PRICE_TO_BUY as PRICE_TO_BUY_NORMAL,
-    i.PRICE_TO_SELL as PRICE_TO_SELL,
-    ROUND( (i.PRICE_TO_SELL-i.PRICE_TO_BUY)
-        * 100 / i.PRICE_TO_BUY , 2 )      AS PRICE_DIFFERENCE
-FROM        CROP        c
-    JOIN        SEED        s  ON s.NAME_CROP = c.NAME_CROP
-    JOIN        ITEM        i  ON i.ID_ITEM   = s.ID_SEED
-WHERE       UPPER(c.QUALITY) = 'COOPER'
-    AND       i.PRICE_TO_BUY  IS NOT NULL
-    AND       i.PRICE_TO_SELL IS NOT NULL
-    AND       i.PRICE_TO_SELL < i.PRICE_TO_BUY       
-ORDER BY    pct_difference ASC;
+    i.PRICE_TO_BUY AS PRICE_TO_BUY_NORMAL,
+    i.PRICE_TO_SELL AS PRICE_TO_SELL,
+    ROUND((i.PRICE_TO_SELL - i.PRICE_TO_BUY) * 100 / i.PRICE_TO_BUY, 2) AS PRICE_DIFFERENCE
+FROM CROP c
+    JOIN SEED s ON s.NAME_CROP = c.NAME_CROP
+    JOIN ITEM i ON i.ID_ITEM = s.ID_SEED
+WHERE UPPER(c.QUALITY) = 'COOPER'
+    AND i.PRICE_TO_BUY IS NOT NULL
+    AND i.PRICE_TO_SELL IS NOT NULL
+    AND i.PRICE_TO_SELL < i.PRICE_TO_BUY
+ORDER BY PRICE_DIFFERENCE ASC;
 
--- Items Query 2 - Item popularity
-SELECT  sh.name_shop           AS STORE_NAME,
-        sh.specialization      AS SPECIALIZATION,
-        it.name                AS ITEM_NAME,
-        SUM(bs.amount)         AS NUM_PURCHASES
-FROM    buy_sell bs
-JOIN    (  SELECT id_item
-           FROM   buy_sell
-           WHERE  action = 'BUY'
-           GROUP  BY id_item
-           ORDER  BY SUM(amount) DESC
-           FETCH  FIRST 1 ROW ONLY         
-        ) best
-      ON best.id_item = bs.id_item
-JOIN    shop  sh ON sh.id_shop = bs.id_shop
-JOIN    item  it ON it.id_item = bs.id_item
-WHERE   bs.action = 'BUY'
-GROUP  BY sh.name_shop, sh.specialization, it.name
-ORDER  BY times_sold DESC, sh.name_shop;
+-- ITEMS QUERY 1 - NOT STONKS - Sol2
+SELECT c.NAME_CROP AS CROP_NAME,
+       s.SEED_TYPE AS TYPE,
+       i.PRICE_TO_BUY AS PRICE_TO_BUY_NORMAL,
+       i.PRICE_TO_SELL AS PRICE_TO_SELL,
+       ROUND((i.PRICE_TO_SELL - i.PRICE_TO_BUY)*100/i.PRICE_TO_BUY,2) AS PRICE_DIFFERENCE
+FROM   ITEM i
+    LEFT JOIN SEED s ON s.ID_SEED   = i.ID_ITEM
+    LEFT JOIN CROP c ON c.NAME_CROP = s.NAME_CROP
+WHERE  UPPER(c.QUALITY) = 'COOPER'
+  AND  i.PRICE_TO_BUY  IS NOT NULL
+  AND  i.PRICE_TO_SELL IS NOT NULL
+  AND  i.PRICE_TO_SELL < i.PRICE_TO_BUY
+ORDER BY PRICE_DIFFERENCE ASC;
 
--- Items Query 3 - Cutting it close
-SELECT  sh.name_shop                    AS shop_name,
-        sh.specialization               AS specialization,
-        pl.nickname                     AS player_name,
-        it.name                         AS item_name,
-        bs.amount                       AS amount,
-        ABS(bs.money_fluctuation)       AS gold_expended,     
-        TRUNC(bs.action_time)           AS date_of_purchase   
-FROM    buy_sell bs
-JOIN    shop   sh ON sh.id_shop   = bs.id_shop
-JOIN    player pl ON pl.id_player = bs.id_player
-JOIN    item   it ON it.id_item   = bs.id_item
-WHERE   bs.action = 'BUY'                                   
-  AND   EXTRACT(month FROM bs.action_time) = 12            
-  AND   bs.action_time = (                                    
-            SELECT MAX(bs2.action_time)
-            FROM   buy_sell bs2
-            WHERE  bs2.action = 'BUY'
-              AND  TRUNC(bs2.action_time) = TRUNC(bs.action_time)
+-- ITEMS QUERY 2 - ITEM POPULARITY
+SELECT  
+    sh.NAME_SHOP AS STORE_NAME,
+    sh.SPECIALIZATION AS SPECIALIZATION,
+    it.NAME AS ITEM_NAME,
+    SUM(bs.AMOUNT) AS NUM_PURCHASES
+FROM BUY_SELL bs
+    JOIN (
+        SELECT ID_ITEM
+        FROM BUY_SELL
+        WHERE ACTION = 'BUY'
+        GROUP BY ID_ITEM
+        ORDER BY SUM(AMOUNT) DESC
+        FETCH FIRST 1 ROW ONLY
+    ) best ON best.ID_ITEM = bs.ID_ITEM
+    JOIN SHOP sh ON sh.ID_SHOP = bs.ID_SHOP
+    JOIN ITEM it ON it.ID_ITEM = bs.ID_ITEM
+WHERE bs.ACTION = 'BUY'
+GROUP BY sh.NAME_SHOP, sh.SPECIALIZATION, it.NAME
+ORDER BY NUM_PURCHASES DESC, sh.NAME_SHOP;
+
+-- ITEMS QUERY 3 - CUTTING IT CLOSE
+SELECT  
+    sh.NAME_SHOP AS SHOP_NAME,
+    sh.SPECIALIZATION AS SPECIALIZATION,
+    pl.NICKNAME AS PLAYER_NAME,
+    it.NAME AS ITEM_NAME,
+    bs.AMOUNT AS AMOUNT,
+    ABS(bs.MONEY_FLUCTUATION) AS GOLD_EXPENDED,
+    TRUNC(bs.ACTION_TIME) AS DATE_OF_PURCHASE
+FROM BUY_SELL bs
+    JOIN SHOP sh ON sh.ID_SHOP = bs.ID_SHOP
+    JOIN PLAYER pl ON pl.ID_PLAYER = bs.ID_PLAYER
+    JOIN ITEM it ON it.ID_ITEM = bs.ID_ITEM
+WHERE bs.ACTION = 'BUY'
+    AND EXTRACT(MONTH FROM bs.ACTION_TIME) = 12
+    AND bs.ACTION_TIME = (
+        SELECT MAX(bs2.ACTION_TIME)
+        FROM BUY_SELL bs2
+        WHERE bs2.ACTION = 'BUY'
+          AND TRUNC(bs2.ACTION_TIME) = TRUNC(bs.ACTION_TIME)
+    )
+ORDER BY DATE_OF_PURCHASE;
+
+-- ITEMS QUERY 4 - SPARE NO EXPENSE
+SELECT  
+    i1.NAME AS ITEM1,
+    i2.NAME AS ITEM2,
+    (f1.HEALTH_REGAIN + f2.HEALTH_REGAIN) AS TOTAL_HEALTH
+FROM FOOD f1
+    JOIN FOOD f2 ON f1.ID_FOOD < f2.ID_FOOD
+    JOIN ITEM i1 ON i1.ID_ITEM = f1.ID_FOOD
+    JOIN ITEM i2 ON i2.ID_ITEM = f2.ID_FOOD
+ORDER BY ABS((f1.HEALTH_REGAIN + f2.HEALTH_REGAIN) - 100)
+FETCH FIRST 20 ROWS ONLY;
+
+-- ITEMS QUERY 5 - THE BEST PLACES
+SELECT  
+    p.LOCATION_NAME AS LOCATION_NAME,
+    COUNT(*) AS TRANSACTION_COUNT
+FROM BUY_SELL bs
+    JOIN SHOP sh ON sh.ID_SHOP = bs.ID_SHOP
+    JOIN PLACE p ON p.ID_PLACE = sh.ID_PLACE
+WHERE ABS(bs.MONEY_FLUCTUATION) > 200
+GROUP BY p.LOCATION_NAME
+ORDER BY TRANSACTION_COUNT DESC;
+
+-- ITEMS QUERY 6 - ITEM SALE
+SELECT  
+    ITEM_NAME,
+    SHOP,
+    PLAYER_NAME,
+    ROUND(UNIT_PRICE - BASELINE_PRICE, 2) AS MONEY_EARNED_OVER_BASE
+FROM (
+    SELECT  
+        it.NAME AS ITEM_NAME,
+        sh.NAME_SHOP AS SHOP,
+        pl.NICKNAME AS PLAYER_NAME,
+        ABS(bs.MONEY_FLUCTUATION) / bs.AMOUNT AS UNIT_PRICE,
+        MIN(it.PRICE_TO_SELL) OVER (PARTITION BY it.NAME) AS BASELINE_PRICE,
+        MAX(ABS(bs.MONEY_FLUCTUATION) / bs.AMOUNT) OVER (PARTITION BY it.NAME, pl.NICKNAME) AS MAX_PRICE,
+        MIN(ABS(bs.MONEY_FLUCTUATION) / bs.AMOUNT) OVER (PARTITION BY it.NAME, pl.NICKNAME) AS MIN_PRICE
+    FROM BUY_SELL bs
+        JOIN ITEM it ON it.ID_ITEM = bs.ID_ITEM
+        JOIN SHOP sh ON sh.ID_SHOP = bs.ID_SHOP
+        JOIN PLAYER pl ON pl.ID_PLAYER = bs.ID_PLAYER
+    WHERE bs.ACTION = 'SELL'
+      AND bs.AMOUNT > 0
+)
+WHERE UNIT_PRICE = MAX_PRICE
+   OR UNIT_PRICE = MIN_PRICE
+ORDER BY ITEM_NAME, PLAYER_NAME, MONEY_EARNED_OVER_BASE DESC;
+
+-- ITEMS Q-6 – Using IDs (Explained in report)
+/*
+SELECT  
+    it.NAME AS ITEM_NAME,
+    sh.NAME_SHOP AS SHOP,
+    pl.NICKNAME AS PLAYER_NAME,
+    ROUND(ABS(bs.MONEY_FLUCTUATION) / bs.AMOUNT - it.PRICE_TO_SELL, 2) AS MONEY_EARNED_OVER_BASE
+FROM BUY_SELL bs
+    JOIN ITEM it ON it.ID_ITEM = bs.ID_ITEM
+    JOIN SHOP sh ON sh.ID_SHOP = bs.ID_SHOP
+    JOIN PLAYER pl ON pl.ID_PLAYER = bs.ID_PLAYER
+WHERE bs.ACTION = 'SELL'
+  AND bs.AMOUNT > 0
+  AND (
+        ABS(bs.MONEY_FLUCTUATION) / bs.AMOUNT = (
+            SELECT MAX(ABS(bs2.MONEY_FLUCTUATION) / bs2.AMOUNT)
+            FROM BUY_SELL bs2
+            WHERE bs2.ACTION = 'SELL'
+              AND bs2.AMOUNT > 0
+              AND bs2.ID_ITEM = bs.ID_ITEM
+              AND bs2.ID_PLAYER = bs.ID_PLAYER
         )
-ORDER  BY date_of_purchase;                                 
+     OR ABS(bs.MONEY_FLUCTUATION) / bs.AMOUNT = (
+            SELECT MIN(ABS(bs3.MONEY_FLUCTUATION) / bs3.AMOUNT)
+            FROM BUY_SELL bs3
+            WHERE bs3.ACTION = 'SELL'
+              AND bs3.AMOUNT > 0
+              AND bs3.ID_ITEM = bs.ID_ITEM
+              AND bs3.ID_PLAYER = bs.ID_PLAYER
+        )
+  )
+ORDER BY it.NAME, pl.NICKNAME, MONEY_EARNED_OVER_BASE DESC;
+*/
 
--- Items Query 4 - Spare no expense
-SELECT  i1.name                       AS item1,
-        i2.name                       AS item2,
-        (f1.health_regain
-         + f2.health_regain)          AS total_health
-FROM    food  f1
-JOIN    food  f2  ON f1.id_food < f2.id_food          -- avoid duplicates and self-pairs
-JOIN    item  i1  ON i1.id_item = f1.id_food          -- names for first food
-JOIN    item  i2  ON i2.id_item = f2.id_food          -- names for second food
-ORDER BY ABS( (f1.health_regain + f2.health_regain) - 100 )
-FETCH  FIRST 20 ROWS ONLY;
+-- TRIGGER
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TRIGGER TRIGGER_1';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE != -4080 THEN
+            RAISE;
+        END IF;
+END;
+/
 
--- Items Query 5 - The best places
-SELECT  p.location_name               AS location_name,
-        COUNT(*)                      AS transaction_count
-FROM    buy_sell   bs
-JOIN    shop       sh  ON sh.id_shop  = bs.id_shop      -- shop of the transaction
-JOIN    place      p   ON p.id_place  = sh.id_place     -- village/town/location
-WHERE   ABS(bs.money_fluctuation) > 200                 -- > 200 gold, spend or earn
-GROUP  BY p.location_name
-ORDER  BY transaction_count DESC;                       -- busiest first
-
-
-
+CREATE OR REPLACE TRIGGER TRIGGER_1
+AFTER INSERT ON BUY_SELL
+FOR EACH ROW
+WHEN (NEW.ACTION = 'BUY')
+BEGIN
+    UPDATE S_STORED
+    SET QUANTITY = QUANTITY - :NEW.AMOUNT
+    WHERE ID_SHOP = :NEW.ID_SHOP
+      AND ID_ITEM = :NEW.ID_ITEM;
+    MERGE INTO P_STORED p
+    USING (
+        SELECT :NEW.ID_PLAYER AS ID_PLAYER,
+               :NEW.ID_ITEM AS ID_ITEM
+        FROM DUAL
+    ) src
+    ON (p.ID_PLAYER = src.ID_PLAYER
+        AND p.ID_ITEM = src.ID_ITEM)
+    WHEN MATCHED THEN
+        UPDATE SET p.QUANTITY = p.QUANTITY + :NEW.AMOUNT
+    WHEN NOT MATCHED THEN
+        INSERT (ID_PLAYER, ID_ITEM, QUANTITY)
+        VALUES (src.ID_PLAYER, src.ID_ITEM, :NEW.AMOUNT);
+END;
+/
 --QUERY 1) FARM
 SELECT p.ID_PLAYER, p.NICKNAME AS NAME, AVG(pm.END_DATE - pm.START_DATE) AS AVG_TIMESPAN
 FROM PLAYER_MISSION pm
@@ -177,4 +287,3 @@ WHERE p.ID_PLAYER NOT IN (
 GROUP BY p.ID_PLAYER, p.NICKNAME, b.ID_BARN
 HAVING COUNT(DISTINCT a.ID_ANIMAL_SPECIE) > 1
 ORDER BY b.ID_BARN;
-
