@@ -96,18 +96,27 @@ FROM (
  WHERE LOCATION_NAME IS NOT NULL
    AND COORDENATES   IS NOT NULL
 );  
--- insert the different villages
+-- insert unique villages from both RESIDENTS and PLAYER_DATA
 INSERT INTO VILLAGE (ID_VILLAGE, NAME)
-SELECT               
-      ROWNUM      AS ID_VILLAGE,
-       r.VILLAGE                     AS NAME
-FROM  ( SELECT DISTINCT VILLAGE
-        FROM   RESIDENTS
-        WHERE  VILLAGE IS NOT NULL ) r
-WHERE NOT EXISTS (                      
-        SELECT 1
-        FROM   VILLAGE v
-        WHERE  v.NAME = r.VILLAGE );
+SELECT
+  ROWNUM            AS ID_VILLAGE,
+  uv.NAME
+FROM (
+  SELECT DISTINCT VILLAGE AS NAME
+  FROM   RESIDENTS
+  WHERE  VILLAGE IS NOT NULL
+
+  UNION
+
+  SELECT DISTINCT VILLAGE AS NAME
+  FROM   PLAYER_DATA
+  WHERE  VILLAGE IS NOT NULL
+) uv
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM   VILLAGE v
+  WHERE  v.NAME = uv.NAME
+);
 
 -- Character (PLAYER_IDs only)
 INSERT INTO CHARACTER (
@@ -118,17 +127,27 @@ INSERT INTO CHARACTER (
   ID_VILLAGE
 )
 SELECT
-  TO_NUMBER(ID) AS ID_CHARACTER,
-  NAME,
-  TO_NUMBER(AGE) AS AGE,
-  GENDER,
-  NULL AS ID_VILLAGE 
+  TO_NUMBER(pd.ID)      AS ID_CHARACTER,
+  pd.NAME,
+  TO_NUMBER(pd.AGE)     AS AGE,
+  pd.GENDER,
+  v.ID_VILLAGE
 FROM (
+  /* pick one row per player ID */
   SELECT pd.*,
-    ROW_NUMBER() OVER (PARTITION BY ID ORDER BY ROWNUM) as rn
-  FROM PLAYER_DATA pd
-) filtered
-WHERE filtered.rn = 1; 
+         ROW_NUMBER() OVER (PARTITION BY pd.ID ORDER BY ROWNUM) AS rn
+  FROM   PLAYER_DATA pd
+) pd
+LEFT JOIN VILLAGE v
+  ON TRIM(pd.VILLAGE) = v.NAME
+WHERE pd.rn = 1
+  /* optional: skip if already inserted */
+  AND NOT EXISTS (
+    SELECT 1
+    FROM   CHARACTER c
+    WHERE  c.ID_CHARACTER = TO_NUMBER(pd.ID)
+  );
+
 
 -- PLAYER
 INSERT INTO PLAYER (
