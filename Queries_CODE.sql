@@ -82,4 +82,109 @@ GROUP  BY p.location_name
 ORDER  BY transaction_count DESC;                       -- busiest first
 
 
+-- Items Query 6 - Item sale -> This is with item_names, but althrouhg
+-- i did a query with Item IDs since the .csv file has a same name for item
+-- where they have different IDs but when i do with IDs i get 0 for money Fluctation
+-- Im going to include both queries
 
+SELECT  item_name,
+        shop,
+        player_name,
+        ROUND(unit_price - baseline_price , 2) AS money_earned_over_base
+FROM (
+       
+        SELECT  it.name                               AS item_name,
+                sh.name_shop                          AS shop,
+                pl.nickname                           AS player_name,
+                ABS(bs.money_fluctuation) / bs.amount AS unit_price,       
+                MIN(it.price_to_sell)  OVER (PARTITION BY it.name)
+                                                AS baseline_price,    
+                MAX(ABS(bs.money_fluctuation)/bs.amount)
+                     OVER (PARTITION BY it.name, pl.nickname)
+                                                AS max_price,
+                MIN(ABS(bs.money_fluctuation)/bs.amount)
+                     OVER (PARTITION BY it.name, pl.nickname)
+                                                AS min_price
+        FROM   buy_sell bs
+        JOIN   item   it ON it.id_item   = bs.id_item
+        JOIN   shop   sh ON sh.id_shop   = bs.id_shop
+        JOIN   player pl ON pl.id_player = bs.id_player
+        WHERE  bs.action = 'SELL'
+          AND  bs.amount > 0                               
+     )
+WHERE   unit_price = max_price    
+    OR  unit_price = min_price    
+ORDER  BY item_name,
+          player_name,
+          money_earned_over_base DESC;
+
+
+/*
+-- Query with IDs (Query 6)
+/* Items Q-6  – highest & lowest sale price per unit   */
+/*   version without CTEs, now ignores AMOUNT = 0     */
+SELECT  it.name                                    AS item_name,
+        sh.name_shop                               AS shop,
+        pl.nickname                                AS player_name,
+        ROUND( ABS(bs.money_fluctuation)/bs.amount
+               - it.price_to_sell , 2)             AS money_earned_over_base
+FROM    buy_sell bs
+JOIN    item   it ON it.id_item   = bs.id_item
+JOIN    shop   sh ON sh.id_shop   = bs.id_shop
+JOIN    player pl ON pl.id_player = bs.id_player
+WHERE   bs.action = 'SELL'
+  AND   bs.amount > 0                                             
+  AND ( ABS(bs.money_fluctuation)/bs.amount =
+        ( SELECT MAX(ABS(bs2.money_fluctuation)/bs2.amount)
+          FROM   buy_sell bs2
+          WHERE  bs2.action = 'SELL'
+            AND  bs2.amount > 0                                   
+            AND  bs2.id_item   = bs.id_item
+            AND  bs2.id_player = bs.id_player )
+        OR
+        ABS(bs.money_fluctuation)/bs.amount =
+        ( SELECT MIN(ABS(bs3.money_fluctuation)/bs3.amount)
+          FROM   buy_sell bs3
+          WHERE  bs3.action = 'SELL'
+            AND  bs3.amount > 0                                    
+            AND  bs3.id_item   = bs.id_item
+            AND  bs3.id_player = bs.id_player )
+      )
+ORDER  BY it.name, pl.nickname, money_earned_over_base DESC;
+
+*/
+
+-- Trigger
+BEGIN
+  EXECUTE IMMEDIATE 'DROP TRIGGER trigger_1';
+EXCEPTION
+  WHEN OTHERS THEN                          
+    IF SQLCODE != -4080 THEN RAISE; END IF;
+END;
+/                                         
+
+CREATE OR REPLACE TRIGGER trigger_1
+AFTER INSERT ON buy_sell
+FOR EACH ROW
+WHEN (NEW.action = 'BUY')                  
+BEGIN
+  
+    UPDATE s_stored
+       SET quantity = quantity - :NEW.amount
+     WHERE id_shop  = :NEW.id_shop
+       AND id_item  = :NEW.id_item;
+
+    MERGE INTO p_stored p
+    USING (SELECT :NEW.id_player AS id_player, 
+                  :NEW.id_item   AS id_item
+             FROM dual) src
+       ON (p.id_player = src.id_player
+           AND p.id_item   = src.id_item)
+    WHEN MATCHED THEN
+         UPDATE SET p.quantity = p.quantity + :NEW.amount
+    WHEN NOT MATCHED THEN
+         INSERT (id_player, id_item, quantity)
+         VALUES (src.id_player, src.id_item, :NEW.amount);
+END;
+/
+             
