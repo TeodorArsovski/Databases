@@ -300,7 +300,7 @@ INSERT INTO S_STORED
         (ID_ITEM, ID_SHOP, QUANTITY)
 SELECT  ID_ITEM,
         ID_SHOP,
-        SUM(AMOUNT) AS QUANTITY -- I use it to sum all occurances of the same item in different shops bought by same player
+        SUM(AMOUNT) AS QUANTITY 
 FROM    INVENTORIES
 WHERE   ID_SHOP IS NOT NULL
 GROUP BY ID_ITEM, ID_SHOP;
@@ -318,14 +318,14 @@ INSERT INTO BUY_SELL (
 SELECT  t.ID_SHOP,
         t.BUY_ITEM                       AS ID_ITEM,
         t.CLIENT                         AS ID_PLAYER,
-        MAX(t.DATE_OF_PURCHASE)          AS ACTION_TIME,      -- PK column
+        MAX(t.DATE_OF_PURCHASE)          AS ACTION_TIME,      
         'BUY'                            AS ACTION,
-        -1 * MAX(it.PRICE_TO_BUY)        -- money flows *out* of player
+        -1 * MAX(it.PRICE_TO_BUY)        
             * SUM(t.AMOUNT_TO_BUY)       AS MONEY_FLUCTUATION,
         SUM(t.AMOUNT_TO_BUY)             AS AMOUNT
 FROM    TRANSACTIONS t
-JOIN    ITEM  it  ON it.ID_ITEM  = t.BUY_ITEM      -- pull price
-JOIN    SHOP  sp  ON sp.ID_SHOP  = t.ID_SHOP       -- FK guard
+JOIN    ITEM  it  ON it.ID_ITEM  = t.BUY_ITEM      
+JOIN    SHOP  sp  ON sp.ID_SHOP  = t.ID_SHOP       
 JOIN    PLAYER pl ON pl.ID_PLAYER = t.CLIENT
 WHERE   t.ID_SHOP         IS NOT NULL
   AND   t.BUY_ITEM        IS NOT NULL
