@@ -205,20 +205,14 @@ WHERE r.rn = 1
 INSERT INTO INHABITANT (
   ID_INHABITANT,
   PERSONALITY,
-  BIRTHDAY,
+  BIRTHDAY,         
   SPRITE,
   APPEARENCE
 )
 SELECT
-  TO_NUMBER(r.ID)                                    AS ID_INHABITANT,
+  TO_NUMBER(r.ID) AS ID_INHABITANT,
   r.PERSONALITY,
-  CASE
-    WHEN REGEXP_LIKE(TRIM(r.BIRTHDAY), '^\d{1,2}/\d{1,2}/\d{4}$')
-         THEN TO_DATE(TRIM(r.BIRTHDAY), 'DD/MM/YYYY')
-    WHEN REGEXP_LIKE(TRIM(r.BIRTHDAY), '^\d{4}-\d{2}-\d{2}$')
-         THEN TO_DATE(TRIM(r.BIRTHDAY), 'YYYY-MM-DD')
-    ELSE NULL
-  END                                                AS BIRTHDAY,
+  r.BIRTHDAY,          
   r.SPRITE,
   r.APPARENCE
 FROM (
@@ -229,8 +223,8 @@ FROM (
 WHERE r.rn = 1
   AND NOT EXISTS (
         SELECT 1
-        FROM   INHABITANT i
-        WHERE  i.ID_INHABITANT = TO_NUMBER(r.ID)
+        FROM INHABITANT i
+        WHERE i.ID_INHABITANT = TO_NUMBER(r.ID)
       );
 
 -- INSERT DIALOGUE (no SKIPPABLE-filter)
