@@ -300,8 +300,122 @@ BEGIN
 END TRIGGER_CHECK_CAPACITY_BARN;
 /
 
+-- VILLAGE QUERIES
 
+-- QUERY 1
+SELECT 
+    c.NAME, 
+    ROUND(AVG(r.AFFECTION_LEVEL), 2) AS AVG_POINTS, 
+    COUNT(*) AS TOTAL_RELATIONSHIPS 
+FROM ( 
+    SELECT ID_CHARACTER1 AS ID_CHARACTER, AFFECTION_LEVEL FROM RELATIONSHIP 
+    UNION ALL 
+    SELECT ID_CHARACTER2 AS ID_CHARACTER, AFFECTION_LEVEL FROM RELATIONSHIP 
+) r 
+JOIN CHARACTER c ON c.ID_CHARACTER = r.ID_CHARACTER 
+GROUP BY c.ID_CHARACTER, c.NAME 
+HAVING COUNT(*) = (   
+        SELECT MAX(cnt) 
+        FROM (SELECT ID_RESIDENT, COUNT(*) AS cnt 
+            FROM (SELECT ID_CHARACTER1 AS ID_RESIDENT FROM RELATIONSHIP 
+                    UNION ALL 
+                    SELECT ID_CHARACTER2 FROM RELATIONSHIP) GROUP BY ID_RESIDENT)) 
+ORDER  BY TOTAL_RELATIONSHIPS DESC, c.NAME; 
 
+-- QUERY 2
+SELECT  c1.name  AS resident1, 
+        c1.age AS age_resident_1, 
+        c2.name AS resident2, 
+        c2.age AS age_resident_2, 
+        r.affection_level AS relation_points 
+FROM relationship r 
+JOIN character c1 ON c1.id_character = r.id_character1 
+JOIN character c2 ON c2.id_character = r.id_character2 
+WHERE r.affection_level < 10                   
+    AND ( c1.age >= 3 * c2.age 
+        OR c2.age >= 3 * c1.age ) 
+ORDER BY relation_points ASC, resident1, resident2; 
 
+-- QUERY 3
 
+SELECT r.id_inhabitant AS id_resident, 
+        r.id_player AS id_player, 
+        l.id_item AS id_item 
+FROM receive r 
+JOIN letter l ON l.id_letter = r.id_letter 
+WHERE l.id_item IS NOT NULL 
+    AND l.id_item IN ( 
+        SELECT id_item 
+        FROM (SELECT l2.id_item, COUNT(*) AS cnt 
+                FROM receive r2 
+                JOIN letter l2 ON l2.id_letter = r2.id_letter 
+                WHERE l2.id_item IS NOT NULL 
+                GROUP BY l2.id_item ) 
+        WHERE cnt = (                        
+                SELECT MAX(cnt) 
+                FROM (SELECT COUNT(*) AS cnt 
+                        FROM receive r3 
+                        JOIN letter l3 ON l3.id_letter = r3.id_letter 
+                        WHERE l3.id_item IS NOT NULL 
+                        GROUP BY l3.id_item ) ) 
+    ) 
+ORDER BY id_resident, id_player; 
 
+-- QUERY 4
+
+SELECT t.id_inhabitant AS id_resident, 
+        COUNT(*) AS late_activities 
+FROM (SELECT h.id_inhabitant, 
+           (TO_NUMBER(SUBSTR(s.start_time,1,2))*60 + TO_NUMBER(SUBSTR(s.start_time,4,2)) ) AS start_min, 
+           (TO_NUMBER(SUBSTR(s.end_time,1,2))*60 + TO_NUMBER(SUBSTR(s.end_time,4,2))) AS end_min 
+        FROM has h 
+        JOIN schedule s ON s.id_schedule = h.id_schedule 
+      ) t 
+WHERE t.start_min > 0                                      
+    AND t.start_min < (SELECT AVG(TO_NUMBER(SUBSTR(start_time,1,2))*60 + TO_NUMBER(SUBSTR(start_time,4,2))) FROM schedule)                     
+    AND t.start_min > t.end_min                               
+GROUP BY t.id_inhabitant 
+ORDER BY late_activities DESC, id_resident; 
+
+-- QUERY 5
+
+SELECT name 
+
+FROM ( 
+    SELECT c.name 
+    FROM inhabitant i 
+    JOIN character c ON c.id_character = i.id_inhabitant 
+    WHERE EXTRACT(month FROM i.birthday) = 7      
+        AND EXTRACT(year  FROM i.birthday) = 1999 
+    UNION               
+    SELECT  c.name 
+    FROM player p 
+    JOIN character c ON c.id_character = p.id_player 
+    WHERE p.gold >= 2 * (SELECT AVG(gold) FROM player) 
+)                                                        
+ORDER BY name;
+
+-- QUERY 6
+
+SELECT c.name 
+FROM inhabitant  i 
+JOIN character c ON c.id_character = i.id_inhabitant 
+LEFT JOIN relationship r1 ON r1.id_character1 = i.id_inhabitant 
+LEFT JOIN relationship r2 ON r2.id_character2 = i.id_inhabitant 
+WHERE r1.id_character1 IS NULL          
+    AND r2.id_character2 IS NULL           
+ORDER BY c.name;
+
+-- TRIGGER
+
+CREATE OR REPLACE TRIGGER trg_personality_boost 
+AFTER UPDATE OF personality ON inhabitant 
+FOR EACH ROW 
+WHEN  (OLD.personality <> NEW.personality)      
+BEGIN 
+    UPDATE relationship 
+       SET affection_level = affection_level + 1 
+     WHERE id_character1 = :NEW.id_inhabitant 
+        OR id_character2 = :NEW.id_inhabitant; 
+END; 
+/ 
